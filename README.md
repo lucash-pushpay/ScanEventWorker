@@ -36,25 +36,24 @@ Delivered                               → DELIVERY: "DELIVERED"
 #### High level architecture diagram for multi-worker architecture:
 
 ```
-[Scan Event C# Application]
-    ↓ (publishes scan events)
+[Scan Event Worker]
+    ↓ (publishes scan events with schema validation)
+[AWS Glue Schema Registry] ← (validates & versions event schemas)
+    ↓
 [Amazon Kinesis Data Stream] 
-    ↓ (real-time processing)
-├── [Lambda Function/ C# Console App Worker] (event router)
-│   ↓ (publishes to SNS)
-│   [Amazon SNS Topic: "scan-events"]
-│   ↓ (fan-out to multiple SQS queues)
-│   ├── [SQS Queue: eg. "payment-processing"] 
-│   │   └── [Payment Worker App] → [Payment DB] → [DLQ: payment-errors]
-│   ├── [SQS Queue: eg. "fraud-detection"]
-│   │   └── [Fraud Detection Worker] → [ML Service] → [DLQ: fraud-errors]
-│   └── [SQS Queue: eg. "notification-service"]
-│       └── [Notification Worker] → [Email/SMS] → [DLQ: notification-errors]
-└── [Amazon Kinesis Data Firehose] 
-    ↓ (batch analytics pipeline)
-    [Amazon Redshift Cluster]
-    ↓ (analytics queries)
-    [Data Aggregation Service (DAS)]
+    ↓
+    ├── [Notification Service Consumer] 
+    │   ├── (success) → [Notification SQS] → [Notification Worker] → [Email/SMS Service]
+    │   └── (failure after retries) → [Notification DLQ]
+    ├── [Parcel Service Consumer]
+    │   ├── (success) → [Parcel Status SQS] → [Parcel Status Worker] → [DB]
+    │   └── (failure after retries) → [Parcel Status DLQ]
+    │
+    └── [Amazon Kinesis Data Firehose] 
+        ↓ (batch analytics pipeline)
+        [Amazon Redshift Cluster]
+        ↓ (analytics queries)
+        [Data Aggregation Service (DAS)]
 
 [AWS Glue Schema Registry] ← (validates all events)
 [CloudWatch] ← (monitoring & alerting)
